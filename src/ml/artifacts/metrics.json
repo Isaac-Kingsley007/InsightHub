@@ -1,0 +1,97 @@
+{
+  "seed": 42,
+  "sklearn_version": "1.9.1",
+  "data_path": "C:\\zcoad files\\AI Projects\\InsightHub\\datasets\\customer_churn\\train.csv",
+  "test_path": "C:\\zcoad files\\AI Projects\\InsightHub\\datasets\\customer_churn\\test_.csv",
+  "cleaning": {
+    "input_rows": 2000,
+    "clean_rows": 2000,
+    "duplicates_removed": 0,
+    "missing_predictors": {
+      "Account_Age_Days": 0,
+      "Login_Frequency": 0,
+      "Daily_Usage_Mins": 0
+    }
+  },
+  "test_cleaning": {
+    "input_rows": 500,
+    "clean_rows": 500,
+    "duplicates_removed": 0,
+    "missing_predictors": {
+      "Account_Age_Days": 0,
+      "Login_Frequency": 0,
+      "Daily_Usage_Mins": 0
+    }
+  },
+  "split_rows": {
+    "train": 1600,
+    "validation": 400,
+    "test": 500
+  },
+  "raw_features": [
+    "Account_Age_Days",
+    "Login_Frequency",
+    "Daily_Usage_Mins"
+  ],
+  "engineered_features": {
+    "tenure_months": "Account_Age_Days / 30",
+    "log_daily_usage": "log1p(Daily_Usage_Mins)"
+  },
+  "training_churn_rate": 0.3685,
+  "training_churned_mean_usage": 16.416553595658073,
+  "majority_baseline_validation_accuracy": 0.6325,
+  "validation": {
+    "LogisticRegression": {
+      "accuracy": 0.8225,
+      "precision": 0.7923076923076923,
+      "recall": 0.7006802721088435,
+      "f1": 0.7436823104693141,
+      "confusion_matrix": [
+        [
+          226,
+          27
+        ],
+        [
+          44,
+          103
+        ]
+      ]
+    },
+    "RandomForestClassifier": {
+      "accuracy": 0.8025,
+      "precision": 0.75,
+      "recall": 0.6938775510204082,
+      "f1": 0.7208480565371025,
+      "confusion_matrix": [
+        [
+          219,
+          34
+        ],
+        [
+          45,
+          102
+        ]
+      ]
+    }
+  },
+  "selection_rule": "highest validation F1; ties: recall, then accuracy",
+  "selected_model": "LogisticRegression",
+  "test": {
+    "accuracy": 0.82,
+    "precision": 0.8091603053435115,
+    "recall": 0.6198830409356725,
+    "f1": 0.7019867549668874,
+    "confusion_matrix": [
+      [
+        304,
+        25
+      ],
+      [
+        65,
+        106
+      ]
+    ]
+  },
+  "confusion_matrix_order": "rows=actual, columns=predicted; class order [0, 1]",
+  "probability_threshold": 0.5
+}
