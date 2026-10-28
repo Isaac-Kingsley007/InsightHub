@@ -15,7 +15,7 @@ from sklearn.metrics import (ConfusionMatrixDisplay, accuracy_score, confusion_m
                              f1_score, precision_score, recall_score)
 from sklearn.model_selection import train_test_split
 
-from .data import RAW_FEATURES, load_customers
+from .data import NUMERIC_FEATURES, RAW_FEATURES, load_customers
 from .models import build_models
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -70,7 +70,7 @@ def train(data_path, test_path, output_dir, seed=42, validation_size=0.2):
     final_model.fit(frame[RAW_FEATURES], frame["Churn"])
     test_metrics = evaluate(final_model, test[RAW_FEATURES], test["Churn"])
     plot_matrix(test_metrics, f"{selected}: final test", output_dir / "test_confusion_matrix.png")
-    joblib.dump(final_model, output_dir / "churn_model.joblib")
+    joblib.dump(final_model, output_dir / "churn_model.pkl")
 
     # Grouping and filtering provide descriptive analysis of training data only.
     groups = frame.groupby("Login_Frequency", dropna=False).agg(
@@ -105,12 +105,17 @@ def train(data_path, test_path, output_dir, seed=42, validation_size=0.2):
         "probability_threshold": 0.5,
     }
     (output_dir / "metrics.json").write_text(json.dumps(report, indent=2), encoding="utf-8")
-    print("Validation results:\n" + summary.to_string(float_format=lambda value: f"{value:.4f}"))
+    missing_values = sum(cleaning["missing_predictors"].values())
+    print(f"Loaded {len(frame):,} rows, {len(NUMERIC_FEATURES) + 1} features, "
+          f"{missing_values:,} missing values.")
+    print()
+    print(f"{'Model':<22}{'Accuracy':<12}{'Precision':<12}Recall")
+    display_names = {"RandomForestClassifier": "RandomForest"}
     for name, metrics in validation.items():
-        print(f"\n{name} validation confusion matrix: {metrics['confusion_matrix']}")
-    print(f"\nSelected: {selected} (validation F1)")
-    print("Final held-out test:\n" + json.dumps(test_metrics, indent=2))
-    print(f"\nSaved pipeline and reports to {output_dir.resolve()}")
+        print(f"{display_names.get(name, name):<22}{metrics['accuracy']:<12.2f}"
+              f"{metrics['precision']:<12.2f}{metrics['recall']:.2f}")
+    print()
+    print(f"Selected model: {display_names.get(selected, selected)} -> saved to churn_model.pkl")
     return report
 
 

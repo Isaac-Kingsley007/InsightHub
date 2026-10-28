@@ -8,6 +8,7 @@ import pandas as pd
 
 from .data import RAW_FEATURES, clean_customers
 
+ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = Path(__file__).resolve().parent / "artifacts"
 
 
@@ -23,9 +24,9 @@ def predict_customers(model, customers):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--model", type=Path, default=DEFAULT_OUTPUT / "churn_model.joblib")
-    parser.add_argument("--data", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--model", type=Path, default=DEFAULT_OUTPUT / "churn_model.pkl")
+    parser.add_argument("--data", type=Path, default=ROOT / "datasets/customer_churn/test_.csv")
+    parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT / "test_predictions.csv")
     args = parser.parse_args()
     # Load only trusted artifacts: joblib deserialization can execute code.
     model = joblib.load(args.model)

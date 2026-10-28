@@ -44,7 +44,7 @@ features. No artificial spending fields or sentiment labels are generated.
 
 `artifacts/` contains:
 
-- `churn_model.joblib`: full refitted pipeline, including feature engineering.
+- `churn_model.pkl`: full refitted pipeline, including feature engineering (Joblib format).
 - `metrics.json`: cleaning counts, split sizes, model selection rule, validation
   metrics for both models, final test metrics, and scikit-learn version.
 - `validation_metrics.csv`: accuracy, precision, recall, and F1 for both models.
@@ -53,6 +53,15 @@ features. No artificial spending fields or sentiment labels are generated.
 
 Confusion matrices use rows = actual and columns = predicted, ordered [0, 1]:
 `[[true negatives, false positives], [false negatives, true positives]]`.
+
+The terminal output follows the PDF page 3 example: loaded training rows, four
+engineered input features before one-hot encoding, missing raw predictor cells
+before imputation, an accuracy/precision/recall comparison rounded to two decimal
+places, and the selected model filename. Table scores are validation scores;
+F1, confusion matrices, and final held-out test scores remain in the saved reports.
+Counts, scores, and the winning model reflect the actual run, rather than the
+illustrative numbers in the PDF. The saved model is in the output directory
+(`src/ml/artifacts` by default).
 
 `predict_customers` in `src.ml.predict` can be reused by the later API. It accepts
 unlabeled rows and returns predicted churn plus its probability, preserving
