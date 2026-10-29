@@ -1,6 +1,7 @@
 """Read text-based PDFs or UTF-8 text files, preserving PDF page numbers."""
 
 import hashlib
+from io import BytesIO
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -31,7 +32,7 @@ def read_document(path: str | Path) -> Document:
         raise ValueError("Supported document types are .pdf and .txt.")
     content = path.read_bytes()
     if path.suffix.lower() == ".pdf":
-        reader = PdfReader(path)
+        reader = PdfReader(BytesIO(content))
         if reader.is_encrypted:
             raise ValueError("Encrypted PDFs are not supported. Provide an unlocked copy.")
         pages = [DocumentPage(clean_text(page.extract_text() or ""), number)
