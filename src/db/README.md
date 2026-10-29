@@ -24,6 +24,7 @@ this way, and do not print the connection URL because it contains credentials.
 
 The schema follows the agreed two-table design: UUID document/chunk IDs, source
 filename and SHA-256 hash, embedding model, page number, chunk order/text, and
-`VECTOR(768)`. A unique file hash prevents duplicate document records; embeddings
-and inserts will be implemented later. Exact cosine search can be added without
+`VECTOR(768)`. A unique file hash prevents duplicate document records;
+`src.db.documents` now provides duplicate lookup and transactional chunk inserts.
+Exact cosine search can be added without
 an approximate index for the small initial dataset.
