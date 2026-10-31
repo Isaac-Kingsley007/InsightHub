@@ -13,6 +13,24 @@ EMBEDDING_MODEL = "gemini-embedding-001"
 EMBEDDING_DIMENSIONS = 768
 
 
+def embed_query(question: str) -> np.ndarray:
+    """Use the document vector space, optimized for search queries."""
+    load_dotenv(Path(__file__).resolve().parents[2] / ".env")
+    api_key = os.getenv("GEMINI_API_KEY", "").strip()
+    if not api_key:
+        raise ValueError("Set GEMINI_API_KEY in the project root .env or environment.")
+    with genai.Client(api_key=api_key, http_options=types.HttpOptions(
+        timeout=60000, retry_options=types.HttpRetryOptions(attempts=1)
+    )) as client:
+        response = client.models.embed_content(
+            model=EMBEDDING_MODEL, contents=question,
+            config=types.EmbedContentConfig(
+                task_type="RETRIEVAL_QUERY", output_dimensionality=EMBEDDING_DIMENSIONS
+            ),
+        )
+        return validate_vectors([item.values for item in (response.embeddings or [])], 1)[0]
+
+
 def validate_vectors(vectors, expected_count):
     array = np.asarray(vectors, dtype=np.float32)
     if array.shape != (expected_count, EMBEDDING_DIMENSIONS) or not np.isfinite(array).all():
@@ -48,6 +66,7 @@ def embed_documents(texts: list[str], title: str) -> np.ndarray:
                 batch_vectors = [embedding.values for embedding in (response.embeddings or [])]
                 vectors.extend(validate_vectors(batch_vectors, len(batch)))
     except errors.APIError as exc:
+        print(exc.message, exc.response)
         if exc.code == 429:
             raise RuntimeError("Gemini embedding quota or rate limit reached. Try again later.") from None
         raise RuntimeError("Gemini embedding request failed. Check your API key and model access.") from None
