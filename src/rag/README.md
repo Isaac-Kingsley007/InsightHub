@@ -82,6 +82,48 @@ If Gemini reports a quota limit, wait for quota to recover or check the Google
 project's embedding access. If database operations fail, verify the Neon URL,
 network access, and schema setup. Empty/scanned PDFs require OCR separately.
 
-Tests: `python -m unittest src.rag.test_ingest`. Retrieval and API upload endpoints
-will be added later. The eventual query embedder must use the same model and
-dimensions with task type `RETRIEVAL_QUERY`.
+Tests: `python -m unittest src.rag.test_ingest`.
+
+## Retrieval: POST /ask
+
+After ingesting a policy, run the existing API from the project root:
+
+```powershell
+python -m uvicorn src.api.main:app --reload
+```
+
+Open http://127.0.0.1:8000/docs and send this body to `POST /ask`:
+
+```json
+{"question": "How many days do I have to request a refund?"}
+```
+
+The response contains only `answer` and `source_chunks`, matching the PDF contract.
+Source IDs are the UUIDs stored in `document_chunks`, not the PDF's illustrative
+`c_07` labels. Actual answers depend on your ingested policies.
+
+Query embedding uses the same model, 768 dimensions and normalization as ingestion,
+with task type `RETRIEVAL_QUERY`. Exact cosine search selects up to `RAG_TOP_K`
+chunks (default 5), restricted to the matching embedding model. Similarity is
+`1 - cosine distance`. Chunks below `RAG_MIN_SIMILARITY` are removed. Its default
+0.5 is a provisional starting point, not an evaluated confidence threshold.
+Compare relevant and unrelated policy questions to calibrate it in `.env`.
+
+When no chunks qualify, the API returns `I don’t have enough information` and an
+empty citation list without calling the generation model. Otherwise Gemini uses
+the retrieved text and can still decline if it cannot answer from that evidence.
+Pydantic validates the JSON. Unsupported citation IDs, missing citations for an
+answer, or malformed output trigger one retry, then a clean 502 error. Checking
+citation IDs does not prove factual support; evaluate answers against the policy.
+
+The text generation model is selected by your existing `GEMINI_MODEL` setting.
+Database/configuration and rate-limit failures return 503, Gemini timeouts 504,
+and other provider/output failures 502. Provider errors are not returned verbatim.
+No new packages or database migrations are required. Upload endpoints remain for
+later; ingest documents using the existing CLI.
+
+Run offline retrieval tests:
+
+```powershell
+python -m unittest src.rag.test_retrieval
+```
