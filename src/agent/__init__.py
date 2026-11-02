@@ -1,0 +1,1 @@
+"A Langchain Agent that searches documents and runs safe sql queries and answer users questions using the results"
