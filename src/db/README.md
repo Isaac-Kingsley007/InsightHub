@@ -10,7 +10,7 @@ From the project root in your venv:
 python -m src.db.setup
 ```
 
-This enables the vector extension and creates `documents` and `document_chunks`
+This enables the vector extension and creates `customers`, `documents`, and `document_chunks`
 inside the database specified in the URL. Tables are created only if absent;
 this script does not migrate existing table definitions. For a local server whose
 database does not exist yet, use `python -m src.db.setup --create-database`.
@@ -28,3 +28,6 @@ filename and SHA-256 hash, embedding model, page number, chunk order/text, and
 `src.db.documents` now provides duplicate lookup and transactional chunk inserts.
 Exact cosine search can be added without
 an approximate index for the small initial dataset.
+
+Customer CSV import and restricted reader-role setup are documented in
+`src/data_tool/README.md`.

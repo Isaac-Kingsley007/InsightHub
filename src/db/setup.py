@@ -38,7 +38,7 @@ def main():
     if args.create_database:
         create_database(url)
     initialize_schema(url)
-    print("Database schema ready: documents and document_chunks (768 dimensions).")
+    print("Database schema ready: customers, documents and document_chunks (768 dimensions).")
 
 
 if __name__ == "__main__":
