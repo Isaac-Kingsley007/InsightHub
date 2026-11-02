@@ -43,6 +43,7 @@ class IngestionTests(unittest.TestCase):
 
     def test_embedding_batches_and_normalizes(self):
         with patch("src.rag.embeddings.load_dotenv"), \
+             patch("src.rag.embeddings.time.sleep"), \
              patch.dict("os.environ", {"GEMINI_API_KEY": "test"}), \
              patch("src.rag.embeddings.genai.Client") as factory:
             generate = factory.return_value.__enter__.return_value.models.embed_content

@@ -78,8 +78,31 @@ rows commit together; a failed insert rolls back the entire document. Embedding
 failures happen before storage, so retrying the command is safe. Concurrent
 ingestions may both call Gemini, but the database permits only one stored copy.
 
-If Gemini reports a quota limit, wait for quota to recover or check the Google
-project's embedding access. If database operations fail, verify the Neon URL,
+Ingestion batches default to 20 chunks. Requests are paced by chunk count at a
+conservative 60 chunks/minute: a 20-chunk batch reserves 20 seconds before the next
+request, including time spent on the API call. This avoids assuming one batch
+costs one quota unit. Configure `EMBEDDING_BATCH_SIZE` (1–100) and
+`EMBEDDING_CHUNKS_PER_MINUTE` (positive) in `.env` to match your project.
+
+On a temporary 429, the failed batch is retried up to five times. The wait honors
+structured Google RetryInfo plus a 20-second buffer, an increasing backoff, and
+small random jitter. Reported request/minute limits can reduce subsequent pacing
+to 60% of that limit. Explicit daily or zero quotas stop immediately. Errors
+without structured quota details use bounded retries with a conservative fallback.
+Successful batches stay in memory and are not re-embedded during these retries.
+If the process exits or all retries fail, this in-memory progress is lost.
+Logs show progress and retry waits without dumping raw provider responses.
+
+Pacing is per ingestion run, not a project-wide limiter across processes. Other
+clients and token quotas can still cause 429s; lower the pace or check AI Studio
+if they persist. Query embeddings and generation calls retain their existing
+behavior; these long waits apply only to document ingestion. No credential or
+actual `.env` changes are made. If both Google key variables are set, remove the
+unused one from your environment; ingestion explicitly passes GEMINI_API_KEY.
+
+Rate-limit tests: `python -m unittest src.rag.test_rate_limits`.
+
+If database operations fail, verify the Neon URL,
 network access, and schema setup. Empty/scanned PDFs require OCR separately.
 
 Tests: `python -m unittest src.rag.test_ingest`.
