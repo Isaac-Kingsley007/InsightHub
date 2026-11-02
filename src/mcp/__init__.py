@@ -1,0 +1,1 @@
+"MCP server for the Insight Hub project. It provides two tools: one for searching documents based on a query using RAG (Retrieval-Augmented Generation) and another for executing safe SQL queries against a database. The server is initialized with the name 'insight_hub_mcp_server' and can be run using the 'streamable-http' transport method."
