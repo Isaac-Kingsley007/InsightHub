@@ -23,4 +23,4 @@ Known tool errors are returned to the model so it can correct SQL or explain a
 failure. Provider failures or excessive agent steps produce a clean API error.
 Offline checks: `python -m unittest src.agent.test_agent`.
 
-This agent does not implement the separate MCP server required by Part E.
+The same two services are exposed by the separate MCP server in `src/mcp`.
