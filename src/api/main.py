@@ -11,8 +11,10 @@ from src.agent.agent import invoke_agent
 from src.agent.schemas import AgentRequest, AgentResult
 from src.ml.predict import load_churn_model, predict_customers
 from src.ml.schemas import ChurnRequest, ChurnResult
+from src.api.documents import router as documents_router
 
 app = FastAPI(title="InsightHub")
+app.include_router(documents_router)
 
 
 @app.post("/predict-churn", response_model=ChurnResult)
