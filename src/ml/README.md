@@ -1,5 +1,22 @@
 # Part A — customer churn
 
+## Prediction API
+
+Run `python -m uvicorn src.api.main:app --reload` from the project root and use
+`POST /predict-churn` (also available in `/docs`) with a single customer:
+
+```json
+{"Account_Age_Days": 790, "Login_Frequency": "Weekly", "Daily_Usage_Mins": 28}
+```
+
+Returns `predicted_churn` (0 = retained, 1 = churned) and `churn_probability`
+(between 0 and 1). The three input fields are required; numeric values must be
+nonnegative, and login frequency must be Daily, Weekly, or Rarely. Do not submit
+the target label. Invalid input returns 422; an unavailable model returns 503.
+The saved pipeline is cached per process; restart the API after retraining.
+
+Verify with `python -m unittest src.api.test_predict_churn`.
+
 Run commands from the repository root with the existing virtual environment.
 
 ```powershell

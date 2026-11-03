@@ -1,6 +1,7 @@
 """Run from the project root: python -m uvicorn src.api.main:app --reload."""
 
 from fastapi import FastAPI, HTTPException
+import pandas as pd
 
 from src.llm.schemas import AnalysisResult, AnalyzeRequest
 from src.llm.service import AnalysisError, analyze_text
@@ -8,8 +9,23 @@ from src.rag.ask import RetrievalError, ask_question
 from src.rag.schemas import AskRequest, AskResult
 from src.agent.agent import invoke_agent
 from src.agent.schemas import AgentRequest, AgentResult
+from src.ml.predict import load_churn_model, predict_customers
+from src.ml.schemas import ChurnRequest, ChurnResult
 
 app = FastAPI(title="InsightHub")
+
+
+@app.post("/predict-churn", response_model=ChurnResult)
+def predict_churn(request: ChurnRequest) -> dict:
+    try:
+        model = load_churn_model()
+    except Exception:
+        raise HTTPException(status_code=503, detail="Churn model is unavailable. Run python -m src.ml.train.") from None
+    try:
+        result = predict_customers(model, pd.DataFrame([request.model_dump()]))
+        return result.iloc[0].to_dict()
+    except Exception:
+        raise HTTPException(status_code=500, detail="Churn prediction failed. Check the saved model and package versions.") from None
 
 
 @app.post("/ask", response_model=AskResult)
