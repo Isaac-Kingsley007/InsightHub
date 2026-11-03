@@ -1,36 +1,61 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# InsightHub frontend
 
-## Getting Started
+Next.js App Router + React + Tailwind CSS. Three pages share a persistent navigation
+layout, using Next.js Links for client-side navigation:
 
-First, run the development server:
+- `/chat`: agent chat, conversation session IDs, tool-source badges and new chat.
+- `/documents`: PDF/TXT upload (10 MB limit), real document library and duplicate feedback.
+- `/predictions`: model-backed churn probability and the last five predictions on the page.
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+Start the Python API from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe -m uvicorn src.api.main:app --reload
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+In a second terminal:
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```powershell
+cd web
+pnpm install
+pnpm dev
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Open http://localhost:3000. Requests to `/api/*` are proxied to FastAPI at
+`http://127.0.0.1:8000`. To change this, set `API_BASE_URL` in `web/.env.local`, then
+restart Next.js. Backend Gemini/Neon secrets stay in the root `.env`.
 
-## Learn More
+The upload form calls `POST /ingest` with multipart field `file`. The backend
+validates the file, temporarily saves it, calls the existing RAG ingestion service,
+and removes the temporary upload. `GET /documents` lists stored metadata. Uploaded
+originals are not retained. No mock statistics or successful results are displayed.
 
-To learn more about Next.js, take a look at the following resources:
+Uploads run synchronously: keep the page open until confirmation. API pacing and
+429 retries can take several minutes. The local Next.js proxy timeout is 30
+minutes; hosted services may impose shorter limits. For larger jobs, use the
+existing ingestion CLI. Avoid submitting the same file concurrently.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Chat and prediction history are page-local and reset on navigation/reload. Agent
+follow-ups reuse the same session while on the chat page; New conversation resets
+it. The backend's agent memory is process-local. This capstone UI has no sign-in.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Prerequisites: installed Python dependencies including `python-multipart`, working
+Neon schema, the trained `src/ml/artifacts/churn_model.pkl`, and Gemini credentials.
+See the root README and the service READMEs for setup.
 
-## Deploy on Vercel
+Production check: `pnpm build`. Production run: `pnpm start`.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Browser checks
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Playwright uses the installed Microsoft Edge browser by default (no browser download).
+With the API and frontend running, point tests at your frontend URL:
+
+```powershell
+$env:TEST_BASE_URL="http://127.0.0.1:3000"
+pnpm exec playwright test --reporter=line
+```
+
+Set `PLAYWRIGHT_CHANNEL=chrome` to use installed Google Chrome instead. Chat and
+upload browser tests use mocked service responses; the churn test calls the real
+local model API. Backend upload tests cover validation, temporary-file cleanup,
+duplicates and quota failures without consuming Gemini quota.
