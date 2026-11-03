@@ -1,0 +1,35 @@
+"use client";
+
+import { FormEvent, useState } from "react";
+import Link from "next/link";
+import { Icon } from "@/components/icon";
+import { button, ErrorNotice, field, PageHeading } from "@/components/ui";
+import { postJson } from "@/lib/api";
+
+type Result = { predicted_churn: 0 | 1; churn_probability: number };
+type History = Result & { age: number; usage: number; frequency: string };
+
+export default function PredictionsPage() {
+  const [age, setAge] = useState("790");
+  const [usage, setUsage] = useState("28");
+  const [frequency, setFrequency] = useState("Weekly");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [result, setResult] = useState<Result | null>(null);
+  const [history, setHistory] = useState<History[]>([]);
+  async function predict(event: FormEvent) {
+    event.preventDefault(); if (busy) return;
+    setBusy(true); setError(""); setResult(null);
+    try {
+      const prediction = await postJson<Result>("/predict-churn", { Account_Age_Days: Number(age), Login_Frequency: frequency, Daily_Usage_Mins: Number(usage) });
+      setResult(prediction); setHistory(previous => [{ ...prediction, age: Number(age), usage: Number(usage), frequency }, ...previous].slice(0, 5));
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Prediction failed."); }
+    finally { setBusy(false); }
+  }
+  return <>
+    <PageHeading eyebrow="MAKE RETENTION PROACTIVE" title="See the signals. Start a conversation." description="Use account activity to estimate churn risk and make your next customer check-in more informed." />
+    <div className="grid items-stretch gap-6 lg:grid-cols-2"><form onSubmit={predict} className="rounded-2xl border border-slate-200 bg-white p-6 sm:p-8"><div className="mb-7 flex items-center gap-3"><span className="flex size-10 items-center justify-center rounded-xl bg-slate-50 text-emerald-800"><Icon name="chart" /></span><div><h2 className="text-lg font-semibold">Customer activity</h2><p className="mt-1 text-xs text-slate-400">Three inputs. One clearer picture.</p></div></div><div className="space-y-6"><div><label htmlFor="age" className="mb-2 block text-xs font-medium">Account age <span className="font-normal text-slate-400">in days</span></label><input id="age" type="number" min="0" step="1" required disabled={busy} value={age} onChange={event => setAge(event.target.value)} className={field} /><p className="mt-2 text-[11px] text-slate-400">How long has this customer had an account?</p></div><div><label htmlFor="frequency" className="mb-2 block text-xs font-medium">Login frequency</label><select id="frequency" value={frequency} disabled={busy} onChange={event => setFrequency(event.target.value)} className={field}><option>Daily</option><option>Weekly</option><option>Rarely</option></select></div><div><label htmlFor="usage" className="mb-2 block text-xs font-medium">Daily usage <span className="font-normal text-slate-400">in minutes</span></label><input id="usage" type="number" min="0" step="any" required disabled={busy} value={usage} onChange={event => setUsage(event.target.value)} className={field} /></div>{error && <ErrorNotice message={error} />}<button disabled={busy} className={`${button} w-full`}><Icon name="spark" className="size-4" />{busy ? "Calculating prediction…" : "Predict churn risk"}</button></div></form>
+    <section aria-live="polite" aria-busy={busy} className={`flex flex-col rounded-2xl border p-6 sm:p-8 ${result?.predicted_churn ? "border-amber-200 bg-[#fffbf0]" : "border-[#d9e7dc] bg-[#eef5ef]"}`}><p className="text-[10px] font-semibold tracking-[.17em] text-slate-500">PREDICTION SNAPSHOT</p>{result ? <><div className="my-auto py-10"><div className={`inline-flex rounded-full px-3 py-1.5 text-xs font-medium ${result.predicted_churn ? "bg-amber-100 text-amber-900" : "bg-emerald-100 text-emerald-900"}`}>{result.predicted_churn ? "Predicted to churn" : "Predicted to stay"}</div><div className="mt-7 flex items-end gap-2"><span className="text-7xl font-semibold tracking-tighter">{(result.churn_probability * 100).toFixed(1)}</span><span className="mb-2 text-2xl text-slate-500">%</span></div><p className="mt-3 text-sm text-slate-600">Estimated churn probability</p><div className="mt-7 h-2 overflow-hidden rounded-full bg-white"><div className={`h-full rounded-full ${result.predicted_churn ? "bg-amber-500" : "bg-emerald-600"}`} style={{ width: `${result.churn_probability * 100}%` }} /></div><div className="mt-2 flex justify-between text-[10px] text-slate-400"><span>0%</span><span>100%</span></div><p className="mt-7 text-sm leading-7 text-slate-600">{result.predicted_churn ? "A timely check-in could help. Explore this customer’s experience and review relevant support policies." : "Activity signals suggest a lower risk of churn. Keep nurturing the relationship and monitoring changes."}</p></div><Link href="/chat" className="flex items-center gap-2 border-t border-black/10 pt-5 text-xs font-semibold text-emerald-900">Explore with the assistant<Icon name="arrow" className="size-4" /></Link></> : <div className="my-auto py-14 text-center"><span className="mx-auto flex size-16 items-center justify-center rounded-2xl bg-white/80 text-[#75917b]"><Icon name="chart" className="size-8" /></span><h2 className="mt-6 text-xl font-semibold">A clearer view starts here.</h2><p className="mx-auto mt-3 max-w-xs text-sm leading-7 text-slate-500">{busy ? "Reviewing account activity with the trained model…" : "Enter a customer’s activity and run a prediction to see their estimated churn probability."}</p></div>}<p className="mt-5 text-[10px] leading-5 text-slate-500">A model estimate, not a certainty. Predictions use a 50% classification threshold and should support human judgment.</p></section></div>
+    {!!history.length && <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white"><div className="border-b border-slate-100 px-6 py-5"><h2 className="text-base font-semibold">Recent predictions</h2><p className="mt-1 text-xs text-slate-400">Your last five predictions on this page</p></div><div className="overflow-x-auto"><table className="w-full whitespace-nowrap text-left text-xs"><thead className="bg-slate-50 text-[10px] uppercase tracking-wider text-slate-400"><tr>{["Account age", "Logins", "Daily usage", "Churn probability", "Prediction"].map(label => <th key={label} className="px-6 py-4 font-medium">{label}</th>)}</tr></thead><tbody className="divide-y divide-slate-100">{history.map((item, index) => <tr key={index}><td className="px-6 py-4">{item.age} days</td><td className="px-6 py-4">{item.frequency}</td><td className="px-6 py-4">{item.usage} min</td><td className="px-6 py-4 font-medium">{(item.churn_probability * 100).toFixed(1)}%</td><td className="px-6 py-4"><span className={`rounded-full px-2 py-1 text-[10px] ${item.predicted_churn ? "bg-amber-50 text-amber-800" : "bg-emerald-50 text-emerald-800"}`}>{item.predicted_churn ? "Churn" : "Stay"}</span></td></tr>)}</tbody></table></div></section>}
+  </>;
+}
