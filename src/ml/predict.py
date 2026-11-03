@@ -1,6 +1,7 @@
 """Batch inference: python -m src.ml.predict --data customers.csv --output predictions.csv."""
 
 import argparse
+from functools import lru_cache
 from pathlib import Path
 
 import joblib
@@ -10,6 +11,12 @@ from .data import RAW_FEATURES, clean_customers
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_OUTPUT = Path(__file__).resolve().parent / "artifacts"
+
+
+@lru_cache(maxsize=1)
+def load_churn_model():
+    """Load the trusted local training artifact once per API process."""
+    return joblib.load(DEFAULT_OUTPUT / "churn_model.pkl")
 
 
 def predict_customers(model, customers):
