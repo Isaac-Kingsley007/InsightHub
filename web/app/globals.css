@@ -1,6 +1,29 @@
 @import "tailwindcss";
-@theme inline { --font-sans: Arial, Helvetica, sans-serif; }
-body { background: #f7f8fa; color: #192923; font-family: Arial, Helvetica, sans-serif; }
-button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
-button:not(:disabled), select { cursor: pointer; }
-::selection { background: #bcf3d6; color: #143528; }
+
+@theme inline {
+    --font-sans: Arial, Helvetica, sans-serif;
+}
+
+body {
+    background: #f7f8fa;
+    color: #192923;
+    font-family: Arial, Helvetica, sans-serif;
+}
+
+button,
+a,
+input,
+select,
+textarea {
+    -webkit-tap-highlight-color: transparent;
+}
+
+button:not(:disabled),
+select {
+    cursor: pointer;
+}
+
+::selection {
+    background: #bcf3d6;
+    color: #143528;
+}
