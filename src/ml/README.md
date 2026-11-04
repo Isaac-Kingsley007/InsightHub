@@ -1,92 +1,63 @@
-# Part A — customer churn
+# Churn prediction
 
-## Prediction API
+Estimates whether a customer may leave using account age, login frequency, and
+daily usage. `1` means predicted churn; `0` means predicted retention. Estimates
+support review, not guaranteed outcomes. See the [root guide](../../README.md)
+for dependencies and CSV locations. Run commands from the project root.
 
-Run `python -m uvicorn src.api.main:app --reload` from the project root and use
-`POST /predict-churn` (also available in `/docs`) with a single customer:
+## Train and predict
+
+```powershell
+python -m src.ml.train
+python -m src.ml.predict --data datasets/customer_churn/test_.csv --output src/ml/artifacts/test_predictions.csv
+```
+
+Training compares Logistic Regression and Random Forest using an 80/20 stratified
+split of `train.csv`. Highest validation F1 wins (ties: recall, then accuracy).
+The selected pipeline is refitted on all training rows and evaluated once on
+`test_.csv`. Never use test scores to tune the model. Options: `--data`,
+`--test-data`, `--output-dir`, `--seed`, and `--validation-size`.
+
+The web prediction form uses `POST /predict-churn`. API request:
 
 ```json
 {"Account_Age_Days": 790, "Login_Frequency": "Weekly", "Daily_Usage_Mins": 28}
 ```
 
-Returns `predicted_churn` (0 = retained, 1 = churned) and `churn_probability`
-(between 0 and 1). The three input fields are required; numeric values must be
-nonnegative, and login frequency must be Daily, Weekly, or Rarely. Do not submit
-the target label. Invalid input returns 422; an unavailable model returns 503.
-The saved pipeline is cached per process; restart the API after retraining.
+Returns `predicted_churn` and `churn_probability` (0-1), using a 0.5 classification
+threshold. All three fields are required; numbers must be nonnegative and login
+frequency must be Daily, Weekly, or Rarely. Invalid inputs return 422.
 
-Verify with `python -m unittest src.api.test_predict_churn`.
+## Features and saved files
 
-Run commands from the repository root with the existing virtual environment.
+The pipeline derives `tenure_months = Account_Age_Days / 30` (replaces raw age)
+and `log_daily_usage = log1p(Daily_Usage_Mins)` (alongside raw usage). Login
+frequency is one-hot encoded; Logistic Regression numeric inputs are scaled.
+Training-only medians/modes fill missing predictors. Identifiers, support text,
+and the target `Churn` are not model inputs. Duplicate rows are removed;
+invalid labels, duplicate remaining IDs, and train/test ID overlap are rejected.
+
+`src/ml/artifacts/` contains:
+
+- `churn_model.pkl`: Joblib pipeline, including preprocessing and feature creation.
+- `metrics.json` and `validation_metrics.csv`: cleaning/split details and scores.
+- Confusion-matrix charts, login-frequency summary CSV, and churn-rate chart.
+
+Terminal output follows the project example's format with actual validation
+scores. Full F1, confusion matrices and final test results stay in the reports.
+Matrices use rows=actual, columns=predicted, ordered [0, 1]: `[[TN, FP], [FN, TP]]`.
+
+## Maintenance and debugging
+
+The API loads the model lazily and caches it per process. After retraining,
+restart FastAPI. A missing/unloadable model returns 503; prediction failures return
+500. The API expects the default artifact path even if training used `--output-dir`.
+Load only trusted Joblib files, using compatible package versions.
+
+The model and customer prediction exports are Git-ignored; train after a fresh
+checkout. CSV inference preserves Customer_ID when present and accepts unlabeled
+rows. No spending or churn-date features exist in this dataset.
 
 ```powershell
-.\.venv\Scripts\python.exe -m src.ml.train
-.\.venv\Scripts\python.exe -m src.ml.predict --data datasets/customer_churn/test_.csv --output src/ml/artifacts/test_predictions.csv
-.\.venv\Scripts\python.exe -m unittest src.ml.test_workflow
+python -m unittest src.ml.test_workflow src.api.test_predict_churn
 ```
-
-Training accepts `--data`, `--test-data`, `--output-dir`, `--seed`, and
-`--validation-size`. It uses an 80/20 stratified split of `train.csv` to compare
-Logistic Regression and Random Forest. The separate `test_.csv` is reserved for
-one final evaluation of the selected model, after refitting on all training rows.
-Choose by validation F1, with recall and accuracy as tie breakers. This balances
-finding churners with avoiding false alarms. The default decision threshold is 0.5.
-The test scores must not be used to tune the model.
-
-## Data and features
-
-Numeric values must be nonnegative and finite. Login frequency is normalized to
-Daily, Weekly, or Rarely; unknown observed categories fail validation. Empty
-predictors are imputed using training-only medians/modes. Missing or invalid labels
-fail validation. Exact duplicate rows are removed; remaining duplicate customer
-IDs and IDs shared between train and test are rejected.
-
-The model consumes raw `Account_Age_Days`, `Login_Frequency`, and
-`Daily_Usage_Mins`. Its pipeline derives `tenure_months = Account_Age_Days / 30`
-and `log_daily_usage = log1p(Daily_Usage_Mins)`. Raw account age is replaced by
-tenure; daily usage and its log transformation are both included. Login frequency
-is one-hot encoded; numeric features are scaled for Logistic Regression.
-Imputation, encoding, and scaling are fitted inside each pipeline.
-
-`Churn` is the target (1 = churn, 0 = retained). Customer ID, name, and email are
-excluded from predictors. Support messages are retained in the source data for
-Part B, but excluded from this baseline. There is no spending or churn-date field:
-monthly spending and date-specific churn counts cannot be inferred.
-
-Training-only Pandas filtering and grouping produce descriptive summaries of
-churn and usage by login frequency. These summaries are not target-derived model
-features. No artificial spending fields or sentiment labels are generated.
-
-## Outputs
-
-`artifacts/` contains:
-
-- `churn_model.pkl`: full refitted pipeline, including feature engineering (Joblib format).
-- `metrics.json`: cleaning counts, split sizes, model selection rule, validation
-  metrics for both models, final test metrics, and scikit-learn version.
-- `validation_metrics.csv`: accuracy, precision, recall, and F1 for both models.
-- Confusion-matrix PNGs for both validation models and the final test model.
-- `login_frequency_summary.csv` and `churn_by_login_frequency.png`.
-
-Confusion matrices use rows = actual and columns = predicted, ordered [0, 1]:
-`[[true negatives, false positives], [false negatives, true positives]]`.
-
-The terminal output follows the PDF page 3 example: loaded training rows, four
-engineered input features before one-hot encoding, missing raw predictor cells
-before imputation, an accuracy/precision/recall comparison rounded to two decimal
-places, and the selected model filename. Table scores are validation scores;
-F1, confusion matrices, and final held-out test scores remain in the saved reports.
-Counts, scores, and the winning model reflect the actual run, rather than the
-illustrative numbers in the PDF. The saved model is in the output directory
-(`src/ml/artifacts` by default).
-
-`predict_customers` in `src.ml.predict` can be reused by the later API. It accepts
-unlabeled rows and returns predicted churn plus its probability, preserving
-Customer_ID when provided. Run from the repository root so persisted custom
-transformer imports resolve. Only load trusted Joblib artifacts, and use the same
-package versions for training and serving. The model and per-customer prediction
-exports are ignored by the local Git rules; regenerate them using the commands.
-
-The existing environment and Git repository are reused. The assignment also
-requires incremental commits and a GitHub repository named `insighthub`; publishing
-is a separate repository setup step. No Git remote was configured at implementation.

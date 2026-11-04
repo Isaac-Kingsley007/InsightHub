@@ -1,33 +1,36 @@
-# Database setup
+# Database
 
-Packages: `psycopg[binary]`, `pgvector`, and `python-dotenv`.
-Set `DATABASE_URL` in the project root `.env`. A PostgreSQL server with pgvector
-available is required to run setup; Docker is optional.
+PostgreSQL stores customer records, document metadata, and searchable document
+chunks. The app uses Neon; a local PostgreSQL server with pgvector also works.
+Complete the [root setup](../../README.md) first. Run commands from the root.
 
-From the project root in your venv:
+## Initialize
 
 ```powershell
 python -m src.db.setup
 ```
 
-This enables the vector extension and creates `customers`, `documents`, and `document_chunks`
-inside the database specified in the URL. Tables are created only if absent;
-this script does not migrate existing table definitions. For a local server whose
-database does not exist yet, use `python -m src.db.setup --create-database`.
-That option connects to the server's `postgres` database and requires CREATEDB
-privileges. For Neon or another provisioned database, use the regular command.
+Uses root `.env` variable `DATABASE_URL`. Enables pgvector and creates:
 
-Use `with connect_db() as connection:` from `src.db.connection` for future SQL
-operations. The context commits on success, rolls back on error, and closes the
-connection. Vector types are registered automatically. Run setup before connecting
-this way, and do not print the connection URL because it contains credentials.
+| Table | Stores |
+| --- | --- |
+| `customers` | Customer CSV records; UUID primary key |
+| `documents` | Filename, unique SHA-256 file hash, embedding model, timestamp |
+| `document_chunks` | Chunk text, UUID, document ID, order, PDF page, `VECTOR(768)` |
 
-The schema follows the agreed two-table design: UUID document/chunk IDs, source
-filename and SHA-256 hash, embedding model, page number, chunk order/text, and
-`VECTOR(768)`. A unique file hash prevents duplicate document records;
-`src.db.documents` now provides duplicate lookup and transactional chunk inserts.
-Exact cosine search can be added without
-an approximate index for the small initial dataset.
+Setup preserves existing rows and only creates missing tables. It does **not**
+change existing table definitions; write an explicit migration for schema changes.
+For a local server only, `python -m src.db.setup --create-database` can create the
+database named in the URL via the server's `postgres` database (requires CREATEDB).
+Do not use that option for an already-provisioned Neon database.
 
-Customer CSV import and restricted reader-role setup are documented in
-`src/data_tool/README.md`.
+## Developer notes
+
+- `connection.py`: `with connect_db() as connection:` registers vector types,
+  commits on success, rolls back on failure, and closes the connection.
+- `documents.py`: duplicate lookup and atomic document/chunk inserts. Duplicate
+  hashes are skipped; deleting a document cascades to its chunks.
+- The SQL tool uses a separate connection to set READ ONLY before any data query.
+  [Customer import and reader-role setup](../data_tool/README.md) live separately.
+- Keep SSL options in the Neon URL. On connection errors check configuration,
+  network access, database availability, and grants. Do not log the connection URL.

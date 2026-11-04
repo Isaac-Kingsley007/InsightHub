@@ -1,152 +1,90 @@
-# Document preparation
+# Document ingestion and answers
 
-Packages: `pypdf` and `langchain-text-splitters`.
-From the project root in your venv:
+Upload policies so the assistant can answer questions using their text and cite
+supporting chunks. Complete [database and Gemini setup](../../README.md) first.
+All commands below run from the project root with the venv active.
 
-```powershell
-python -m src.rag.prepare --file InsightHub_Project_Question.pdf
-```
+## Add a document
 
-PDFs are read page by page; `.txt` files must be UTF-8. Empty pages are skipped
-without renumbering the original pages. Scanned PDFs require OCR separately.
-Encrypted PDFs and files without extractable text are rejected.
-
-`prepare_document(path)` returns a new document UUID, a document object containing
-filename, content hash and extracted pages, and a list of chunks. Every chunk has
-a UUID, document ID, zero-based document-wide index, content, and a one-based PDF
-page number (or `None` for text files).
-
-Recursive character splitting uses paragraphs, newlines, spaces, then characters.
-Defaults are 1,000 characters with a target overlap of 200; actual overlap depends
-on split boundaries. Chunks never cross page boundaries. Override the settings
-with `--chunk-size` and `--chunk-overlap`. The CLI previews all chunk text.
-
-Document preview does not need a database or Gemini key.
-
-## Full ingestion into Neon
-
-1. Activate the existing environment from the project root:
-
-   ```powershell
-   .\.venv\Scripts\Activate.ps1
-   ```
-
-2. In the root `.env`, set `DATABASE_URL` to your Neon PostgreSQL connection
-   string (keep its SSL parameters, such as `sslmode=require`) and set
-   `GEMINI_API_KEY`. Do not commit this file. The existing `GEMINI_MODEL` setting
-   controls text generation only; ingestion uses `gemini-embedding-001` explicitly.
-
-3. Initialize the schema (safe to rerun):
-
-   ```powershell
-   python -m src.db.setup
-   ```
-
-   Neon already provides the database, so do not pass `--create-database`.
-   Setup enables pgvector and creates the tables; no Docker is required.
-
-4. Ingest your policy document:
-
-   ```powershell
-   python -m src.rag.ingest --file "path/to/refund_policy.pdf"
-   ```
-
-   Example output, with the actual chunk count:
-
-   ```text
-   Ingested refund_policy.pdf: 42 chunks -> stored in pgvector.
-   ```
-
-5. Optionally inspect the result in Neon's SQL editor:
-
-   ```sql
-   SELECT d.id, d.filename, d.embedding_model, count(c.id) AS chunks
-   FROM documents d
-   LEFT JOIN document_chunks c ON c.document_id = d.id
-   GROUP BY d.id;
-   ```
-
-The pipeline checks the SHA-256 file hash before embedding. Repeating the same
-file skips ingestion, even under a different filename. Changed file contents are
-a separate document; existing versions are not automatically replaced. Changing
-chunk settings alone does not reprocess an already-ingested file.
-
-Chunks are embedded in batches of up to 20 with `gemini-embedding-001`, task type
-`RETRIEVAL_DOCUMENT`, and 768 dimensions, then L2-normalized. Invalid counts,
-dimensions, nonfinite values, and zero vectors are rejected. Document and chunk
-rows commit together; a failed insert rolls back the entire document. Embedding
-failures happen before storage, so retrying the command is safe. Concurrent
-ingestions may both call Gemini, but the database permits only one stored copy.
-
-Ingestion batches default to 20 chunks. Requests are paced by chunk count at a
-conservative 60 chunks/minute: a 20-chunk batch reserves 20 seconds before the next
-request, including time spent on the API call. This avoids assuming one batch
-costs one quota unit. Configure `EMBEDDING_BATCH_SIZE` (1–100) and
-`EMBEDDING_CHUNKS_PER_MINUTE` (positive) in `.env` to match your project.
-
-On a temporary 429, the failed batch is retried up to five times. The wait honors
-structured Google RetryInfo plus a 20-second buffer, an increasing backoff, and
-small random jitter. Reported request/minute limits can reduce subsequent pacing
-to 60% of that limit. Explicit daily or zero quotas stop immediately. Errors
-without structured quota details use bounded retries with a conservative fallback.
-Successful batches stay in memory and are not re-embedded during these retries.
-If the process exits or all retries fail, this in-memory progress is lost.
-Logs show progress and retry waits without dumping raw provider responses.
-
-Pacing is per ingestion run, not a project-wide limiter across processes. Other
-clients and token quotas can still cause 429s; lower the pace or check AI Studio
-if they persist. Query embeddings and generation calls retain their existing
-behavior; these long waits apply only to document ingestion. No credential or
-actual `.env` changes are made. If both Google key variables are set, remove the
-unused one from your environment; ingestion explicitly passes GEMINI_API_KEY.
-
-Rate-limit tests: `python -m unittest src.rag.test_rate_limits`.
-
-If database operations fail, verify the Neon URL,
-network access, and schema setup. Empty/scanned PDFs require OCR separately.
-
-Tests: `python -m unittest src.rag.test_ingest`.
-
-## Retrieval: POST /ask
-
-After ingesting a policy, run the existing API from the project root:
+Use **Knowledge base** in the web app, or run:
 
 ```powershell
-python -m uvicorn src.api.main:app --reload
+python -m src.rag.ingest --file "path/to/policy.pdf"
 ```
 
-Open http://127.0.0.1:8000/docs and send this body to `POST /ask`:
+For extraction/chunking preview without API or database access:
+
+```powershell
+python -m src.rag.prepare --file "path/to/policy.pdf"
+```
+
+Supports unlocked, text-based PDFs and UTF-8 `.txt` files. Scans need OCR first.
+PDF page numbers are preserved; empty pages are skipped. Recursive splitting uses
+paragraphs, newlines, spaces, then characters. Defaults: 1,000 characters and a
+200-character target overlap, within each page. Override with `--chunk-size` and
+`--chunk-overlap`; actual overlap depends on split boundaries.
+
+The web endpoint `POST /ingest` accepts multipart field `file` (up to 10 MB).
+Original uploads are deleted after processing; chunk text and metadata remain.
+`GET /documents` lists stored documents. Keep the upload page open until confirmation;
+for long jobs, prefer the CLI over a web request with a proxy timeout.
+
+## Ask a question
+
+Send `POST /ask` through the API docs:
 
 ```json
 {"question": "How many days do I have to request a refund?"}
 ```
 
-The response contains only `answer` and `source_chunks`, matching the PDF contract.
-Source IDs are the UUIDs stored in `document_chunks`, not the PDF's illustrative
-`c_07` labels. Actual answers depend on your ingested policies.
+Returns `answer` and `source_chunks`. Citation IDs are the stored UUIDs.
+Useful partial answers are allowed; missing evidence must be stated. If no chunks
+qualify, the API returns `I don't have enough information` with an empty citation
+list without generating an answer. The model can also decline after reading chunks.
 
-Query embedding uses the same model, 768 dimensions and normalization as ingestion,
-with task type `RETRIEVAL_QUERY`. Exact cosine search selects up to `RAG_TOP_K`
-chunks (default 5), restricted to the matching embedding model. Similarity is
-`1 - cosine distance`. Chunks below `RAG_MIN_SIMILARITY` are removed. Its default
-0.5 is a provisional starting point, not an evaluated confidence threshold.
-Compare relevant and unrelated policy questions to calibrate it in `.env`.
+## Settings and rate limits
 
-When no chunks qualify, the API returns `I don’t have enough information` and an
-empty citation list without calling the generation model. Otherwise Gemini uses
-the retrieved text and can still decline if it cannot answer from that evidence.
-Pydantic validates the JSON. Unsupported citation IDs, missing citations for an
-answer, or malformed output trigger one retry, then a clean 502 error. Checking
-citation IDs does not prove factual support; evaluate answers against the policy.
+| Root `.env` setting | Default | Meaning |
+| --- | --- | --- |
+| `RAG_TOP_K` | `5` | Maximum retrieved candidates; allowed 1-20 |
+| `RAG_MIN_SIMILARITY` | `0.5` | Minimum cosine similarity; allowed -1 to 1 |
+| `EMBEDDING_BATCH_SIZE` | `20` | Chunks per ingestion call; allowed 1-100 |
+| `EMBEDDING_CHUNKS_PER_MINUTE` | `60` | Positive ingestion pacing budget |
 
-The text generation model is selected by your existing `GEMINI_MODEL` setting.
-Database/configuration and rate-limit failures return 503, Gemini timeouts 504,
-and other provider/output failures 502. Provider errors are not returned verbatim.
-No new packages or database migrations are required. Upload endpoints remain for
-later; ingest documents using the existing CLI.
+The similarity threshold is a starting point, not answer confidence. Compare known
+policy questions and unrelated questions before tuning it. Lowering it admits
+more context but can introduce unrelated text.
 
-Run offline retrieval tests:
+Ingestion batches are paced by chunk count: at the defaults a 20-chunk batch
+reserves 20 seconds before the next request, including API time. Temporary 429s
+retry the same batch up to five times, using Google's retry delay plus 20 seconds,
+backoff and jitter. Reported minute quotas can reduce the pace; explicit daily/zero
+quotas stop immediately. Other clients share project quota, so pacing one run
+cannot guarantee no 429s. Query embeddings and text generation do not use these
+long ingestion retries.
+
+## Maintenance and debugging
+
+- `documents.py` / `chunking.py`: extraction and source metadata.
+- `embeddings.py`: fixed `gemini-embedding-001`, 768 dimensions, L2 normalization;
+  document task `RETRIEVAL_DOCUMENT`, query task `RETRIEVAL_QUERY`.
+- `ingest.py`: check file hash, embed, then store document/chunks in one transaction.
+  Exact duplicate files skip API calls even under another name. Changed contents
+  create a separate document; changing chunk settings alone does not reingest it.
+  Old policy versions are not automatically replaced or excluded from search.
+- Completed embeddings survive retries in memory, not process exits. No partial
+  document is saved on failure; concurrent ingestions may still duplicate API work.
+- `retrieval.py`: exact cosine search (`1 - distance`) for the matching model.
+  `ask.py`: prompt, JSON validation, allowed citation IDs, and one output retry.
+  Valid citation IDs do not prove an answer is factually supported; review evidence.
+- If embeddings change model/dimensions, regenerate stored vectors and update
+  query embedding and database schema together. `GEMINI_MODEL` is generation only.
+- Missing answers: check document count, inspect source text, review scores and
+  policy versions. Invalid output/provider errors return 502; unavailable DB,
+  configuration or quota returns 503; Gemini timeout returns 504.
+
+Offline checks:
 
 ```powershell
-python -m unittest src.rag.test_retrieval
+python -m unittest src.rag.test_ingest src.rag.test_rate_limits src.rag.test_retrieval src.api.test_documents
 ```
