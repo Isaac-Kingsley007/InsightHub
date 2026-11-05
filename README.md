@@ -138,8 +138,9 @@ Frontend build and browser-test instructions are in [web/README.md](web/README.m
 
 This is a local capstone app without sign-in. Agent memory resets on API restart;
 use one API worker. Predictions are estimates, and the customer dataset has no
-churn date or spending fields. Docker/deployment files and Part B's PyTorch
-sentiment model are not implemented in this checkout.
+churn date or spending fields. Docker/deployment files are not implemented in this checkout.
+Part B's standalone PyTorch sentiment exercise runs with `python -m src.torch.train`
+using the labeled Twitter CSVs described in its guide; it does not replace Gemini analysis.
 
 ## Code guide
 
@@ -147,6 +148,7 @@ sentiment model are not implemented in this checkout.
 | --- | --- |
 | `web/`, `src/api/` | [Frontend and API connection](web/README.md) |
 | `src/ml/` | [Training, predictions, and reports](src/ml/README.md) |
+| `src/torch/` | [PyTorch sentiment training (Part B)](src/torch/README.md) |
 | `src/llm/` | [Text analysis](src/llm/README.md) |
 | `src/rag/` | [Document ingestion, retrieval, and rate limits](src/rag/README.md) |
 | `src/db/`, `src/data_tool/` | [Database setup](src/db/README.md) and [customer queries](src/data_tool/README.md) |
